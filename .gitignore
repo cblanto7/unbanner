@@ -2,4 +2,9 @@ tags
 
 build
 .gradle
-gradle
+.idea
+out
+
+
+**/.DS_Store
+
