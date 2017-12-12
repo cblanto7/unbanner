@@ -28,6 +28,9 @@ public class CourseController {
   @Autowired
   RoomRepository roomRepository;
 
+  @Autowired
+  SemesterRepository semesterRepository;
+
   @ModelAttribute("allProfessors")
   public List<Professor> getProfessors() {
     return professorRepository.findAll();
@@ -36,6 +39,11 @@ public class CourseController {
   @ModelAttribute("allRooms")
   public List<Room> getRooms() {
     return roomRepository.findAll();
+  }
+
+  @ModelAttribute("allSemesters")
+  public List<Semester> getSemesters() {
+    return semesterRepository.findAll();
   }
 
   @RequestMapping(value = "/courses", method = RequestMethod.GET)
@@ -64,12 +72,12 @@ public class CourseController {
 
   @RequestMapping("/course/{id}")
   public String course(@PathVariable String id, Model model) {
-    Course course = repository.findOne(id);
-    if (course != null) {
+    if (repository.findOne(id) != null) {
       model.addAttribute("course", repository.findOne(id));
       return "course";
+    } else {
+      return "redirect:/error/Null Course";
     }
-    return "redirect:/";
   }
 
   @RequestMapping(value = "/course/{id}", method = RequestMethod.DELETE)
@@ -99,21 +107,37 @@ public class CourseController {
   public String newSection(@ModelAttribute("section") Section section,
                            @PathVariable String id, String startTime, String endTime) {
 
-    section = sectionRepository.save(section); //generate an ObjectID
-    section.setStartAndEndTime(startTime,endTime);
-    Course course = repository.findOne(id);
-    List<Section> sections = course.getSections();
-    sections.add(section);
-    if (Section.conflicts(sections)) {
-      return "redirect:/error/Schedule Time Conflict";
-    }
-    section.course = course;
-    //Section savedSection = sectionRepository.save(section);
-    course.addSection(section);
-    repository.save(course);
-    sectionRepository.save(section);
 
-    return "redirect:/courses";
+    Section tempSection = new Section();
+    tempSection.setStartAndEndTime(startTime, endTime);
+    tempSection.schedule = section.schedule;
+    System.out.println("professor: " + section.professor);
+    System.out.println("room: " + section.room);
+    Professor prof = section.professor;
+    tempSection.professor = section.professor;
+    Course course = repository.findOne(id);
+    System.out.println("course: " + course);
+    course.sections.add(tempSection);
+    tempSection.course = course;
+    tempSection.number = section.number;
+    tempSection.room = section.room;
+    tempSection.semester = section.semester;
+
+
+    if (Section.conflicts(tempSection.course.sections)) {
+      return "redirect:/error/Schedule Time Conflict";
+    } else {
+      tempSection = sectionRepository.save(tempSection); //generate an ObjectID
+      prof.sections.add(tempSection);
+      section.semester.sections.add(tempSection);
+      semesterRepository.save(section.semester);
+      professorRepository.save(prof);
+      repository.save(course);
+      sectionRepository.save(tempSection);
+
+      return "redirect:/courses";
+    }
+
   }
 
   @RequestMapping(value = "/course/{id}", method = RequestMethod.POST)

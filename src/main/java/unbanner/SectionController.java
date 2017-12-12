@@ -2,6 +2,7 @@ package unbanner;
 
 import java.util.List;
 
+
 import org.bson.types.ObjectId;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -14,8 +15,15 @@ import org.springframework.web.bind.annotation.RequestMethod;
 
 @Controller
 public class SectionController {
+
   @Autowired
-  SectionRepository repository;
+  SectionService sectionService;
+
+  @Autowired
+  SectionRepository sectionRepository;
+
+  @Autowired
+  CourseRepository courseRepository;
 
   @Autowired
   StudentRepository studentRepository;
@@ -25,11 +33,6 @@ public class SectionController {
 
   @Autowired
   ProfessorRepository professorRepository;
-
-  @Autowired
-  BuildingRepository buildingRepo;
-
-
 
   @ModelAttribute("allStudents")
   public List<Student> getStudents() {
@@ -46,84 +49,84 @@ public class SectionController {
     return roomRepository.findAll();
   }
 
-
+  //Get
   @RequestMapping(value = "/section/{id}")
   public String section(@PathVariable String id, Model model) {
-    Section section = repository.findById(id);
+    Section section = sectionRepository.findById(id);
     if (section != null) {
       model.addAttribute("section", section);
-      model.addAttribute("course",section.course);
+      model.addAttribute("course", section.course);
       return "section";
     }
     return "redirect:/";
   }
 
+  //Delete TODO update all references after delete
   @RequestMapping(value = "/section/{id}", method = RequestMethod.DELETE)
   public String section(@PathVariable String id) {
-    Section section = repository.findById(id);
-    if (section != null) {
-      Course course = section.getCourse();
-      if (course == null) {
-        return "redirect:/";
-      } else {
-        ObjectId courseId = course.id;
-        repository.delete(id);
-        return "redirect:/course/" + courseId;
-      }
+    Section section = sectionRepository.findById(id);
+
+    for(Student student : section.students){
+      student.sections.remove(section);
+      studentRepository.save(student);
     }
-    return "redirect:/";
+
+    section.professor.getSections().remove(section);
+    professorRepository.save(section.professor);
+
+    section.course.getSections().remove(section);
+    courseRepository.save(section.course);
+
+    section.room.getSectionList().remove(section);
+    roomRepository.save(section.room);
+
+    sectionRepository.delete(section);
+    return "redirect:/course/" + section.course.id;
   }
 
   //Update
   @RequestMapping(value = "/section/{id}", method = RequestMethod.POST)
-  public String section(@ModelAttribute("section") Section section, String startTime, String endTime,
+  public String section(@ModelAttribute("section") Section section,
+                        String startTime, String endTime,
                         @PathVariable String id) {
-    Section tempSec = repository.findOne(id);
-    System.out.println("UPDATE HAS BEEN CALLED");
-
-    if (tempSec != null) {
-      System.out.println("TempSec != null. calling .doesTimeConflictsRoom");
-      if (section.doesTimeConflictsRoom()) return "redirect:/error/Schedule Time Conflict";
 
 
-      System.out.println("tempSec.id = " + tempSec.id);
-      System.out.println("section.id = " + section.id);
-      if (tempSec.room != null && !tempSec.room.sectionList.isEmpty()) {
-        tempSec.room.sectionList.remove(tempSec);
-        roomRepository.save(tempSec.room);
-      }
 
-      tempSec.room = section.room;
-      section.room.sectionList.add(section);
-      roomRepository.save(section.room);
+    Section tempSection = new Section();
+    tempSection.setStartAndEndTime(startTime, endTime);
 
-      tempSec.professor = section.professor;
-
-      tempSec.number = section.number;
-      tempSec.schedule = section.schedule;
-      tempSec.setStartAndEndTime(startTime,endTime);
-
-      if (section.students != null) {
-        for (Student student : section.students) {
-          if (!tempSec.students.contains(student)) {
-            student.sections.add(tempSec);
-            studentRepository.save(student);
-          }
-        }
-      }
-
-      for (Student student : tempSec.students) {
-        if (!section.students.contains(student)) {
-          student.removeSection(tempSec);
-          studentRepository.save(student);
-        }
-      }
-
-      tempSec.students = section.students;
-      repository.save(tempSec);
-      return "redirect:/section/" + section.getId();
+    /*
+    if (tempSection.doesTimeConflictsRoom()) {
+      return "redirect:/error/Schedule Time Conflict";
     }
-    return "redirect:/";
+    */
+
+    System.out.println("professor: " + section.professor);
+    System.out.println("room: " + section.room);
+    Course course = section.course;
+    System.out.println("course: " + course);
+
+    tempSection.id = section.id;
+    tempSection.schedule = section.schedule;
+    tempSection.professor = section.professor;
+    tempSection.course = course;
+    tempSection.number = section.number;
+    tempSection.room = section.room;
+    tempSection.students = section.students;
+
+
+    if (Section.conflicts(course.sections)) {
+      return "redirect:/error/Schedule Time Conflict";
+    } else {
+
+      Section oldSection = sectionRepository.findOne(id);
+
+      tempSection.semester = oldSection.semester;
+
+      sectionService.updateReferences(oldSection, tempSection);
+      return "redirect:/section/" + oldSection.id;
+    }
+
   }
 
 }

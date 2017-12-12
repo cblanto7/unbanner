@@ -57,10 +57,15 @@ public class ProfessorController {
     return "redirect:/professors";
   }
 
+  // Get
   @RequestMapping("/professor/{id}")
   public String professor(@PathVariable String id, Model model) {
-    model.addAttribute("professor", repository.findOne(id));
-    return "professor";
+    Professor professor = repository.findById(id);
+    if (professor != null) {
+      model.addAttribute("professor", professor);
+      return "professor";
+    }
+    return "redirect:/";
   }
 
   @RequestMapping(value = "/professor/{id}", method = RequestMethod.DELETE)
@@ -75,14 +80,15 @@ public class ProfessorController {
     return "redirect:/professors";
   }
 
+  //update
   @RequestMapping(value = "/professor/{id}", method = RequestMethod.POST)
   public String student(@ModelAttribute("professor") Professor professor,
                         @PathVariable String id) {
     Professor tempPro = repository.findOne(id);
     tempPro.firstName = professor.firstName;
     tempPro.lastName = professor.lastName;
-    tempPro = repository.save(tempPro);
-    return "redirect:/professor/{id}/" + tempPro.id;
+    repository.save(tempPro);
+    return "redirect:/professor/" + id;
   }
 
 }
